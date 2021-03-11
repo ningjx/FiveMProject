@@ -1,7 +1,6 @@
 ﻿using CitizenFX.Core;
-using Newtonsoft.Json;
+using static CitizenFX.Core.Native.API;
 using System;
-using System.IO;
 
 namespace FirstResourceClient.net
 {
