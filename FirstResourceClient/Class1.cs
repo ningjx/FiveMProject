@@ -47,7 +47,7 @@ namespace FirstResourceClient.net
                 var ve = await World.CreateVehicle(new Model((int)vehicle), new Vector3((float)x, (float)y, (float)z), (float)heading);
                 Game.PlayerPed.SetIntoVehicle(ve, VehicleSeat.Driver);
             }
-
+            
             //foreach (var weapon in WeaponNames)
             //{
             //    try

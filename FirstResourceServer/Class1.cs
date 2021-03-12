@@ -58,9 +58,6 @@ namespace FirstResourceServer.net
                 {"Waepon",GetSelectedPedWeapon(ped)}
             };
 
-            Debug.WriteLine(JsonConvert.SerializeObject(player.Identifiers));
-            Debug.WriteLine(JsonConvert.SerializeObject(player.State));
-
             var licenseIdentifier = player.Identifiers["license"];
 
             await Delay(0);
