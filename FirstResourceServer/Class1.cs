@@ -9,6 +9,7 @@ namespace FirstResourceServer.net
 {
     public class Class1 : BaseScript
     {
+        private const string Path = "PlayerData.json";
         public Class1()
         {
             EventHandlers.Add("sp:serverPlayerSpawned", new Action<Player, string>(PlayerSpawned));
@@ -18,16 +19,26 @@ namespace FirstResourceServer.net
         private async void PlayerSpawned([FromSource] Player player, string useless)
         {
             await Delay(0);
-            if (File.Exists("position.json"))
+            if (File.Exists(Path))
             {
-                var data = File.ReadAllText("position.json");
-                if (!string.IsNullOrEmpty(data))
+                var text = File.ReadAllText(Path);
+                if (!string.IsNullOrEmpty(text))
                 {
-                    var positions = JsonConvert.DeserializeObject<Dictionary<string, Tuple<float, float, float>>>(data);
+                    var datas = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, object>>>(text);
                     var licenseIdentifier = player.Identifiers["license"];
-                    if (positions.TryGetValue(licenseIdentifier, out Tuple<float, float, float> position))
+                    if (datas.TryGetValue(licenseIdentifier, out Dictionary<string, object> data))
                     {
-                        TriggerClientEvent("sp:clientPlayerSpawned", position.Item1, position.Item2, position.Item3);
+                        object[] arg = new object[]
+                        {
+                            data["X"],
+                            data["Y"],
+                            data["Z"],
+                            data["Heading"],
+                            data["Model"],
+                            data["Vehicle"],
+                            data["Waepon"]
+                        };
+                        TriggerClientEvent("sp:clientPlayerSpawned", arg);
                     }
                 }
             }
@@ -35,27 +46,41 @@ namespace FirstResourceServer.net
 
         private async void OnPlayerDropped([FromSource] Player player, string reason)
         {
-            var position = new Tuple<float, float, float>(player.Character.Position.X, player.Character.Position.Y, player.Character.Position.Z);
-            var licenseIdentifier = player.Identifiers["license"];
-            var positions = new Dictionary<string, Tuple<float, float, float>>();
-            await Delay(0);
-            if (File.Exists("position.json"))
+            var ped = GetPlayerPed(player.Handle);
+            var playerData = new Dictionary<string, object>
             {
-                //position.Z += 1;
-                var data = File.ReadAllText("position.json");
-                if (!string.IsNullOrEmpty(data))
-                    positions = JsonConvert.DeserializeObject<Dictionary<string, Tuple<float, float, float>>>(data);
+                {"X",player.Character.Position.X},
+                {"Y",player.Character.Position.Y},
+                {"Z",player.Character.Position.Z},
+                {"Heading", player.Character.Heading },
+                {"Model",player.Character.Model },
+                {"Vehicle", GetEntityModel(GetVehiclePedIsIn(ped, true))},
+                {"Waepon",GetSelectedPedWeapon(ped)}
+            };
 
-                if (positions.ContainsKey(licenseIdentifier))
-                    positions[licenseIdentifier] = position;
+            Debug.WriteLine(JsonConvert.SerializeObject(player.Identifiers));
+            Debug.WriteLine(JsonConvert.SerializeObject(player.State));
+
+            var licenseIdentifier = player.Identifiers["license"];
+
+            await Delay(0);
+            var datas = new Dictionary<string, Dictionary<string, object>>();
+            if (File.Exists(Path))
+            {
+                var text = File.ReadAllText(Path);
+                if (!string.IsNullOrEmpty(text))
+                    datas = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, object>>>(text);
+
+                if (datas.ContainsKey(licenseIdentifier))
+                    datas[licenseIdentifier] = playerData;
                 else
-                    positions.Add(licenseIdentifier, position);
+                    datas.Add(licenseIdentifier, playerData);
             }
             else
             {
-                positions.Add(licenseIdentifier, position);
+                datas.Add(licenseIdentifier, playerData);
             }
-            File.WriteAllText("position.json", JsonConvert.SerializeObject(positions));
+            File.WriteAllText(Path, JsonConvert.SerializeObject(datas));
         }
     }
 }
