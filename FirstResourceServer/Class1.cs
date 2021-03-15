@@ -55,7 +55,7 @@ namespace FirstResourceServer.net
                 {"Heading", player.Character.Heading },
                 {"Model",player.Character.Model },
                 {"Vehicle", GetEntityModel(GetVehiclePedIsIn(ped, true))},
-                {"Waepon",GetSelectedPedWeapon(ped)}
+                {"Waepon", GetEntityModel(GetSelectedPedWeapon(ped))}
             };
 
             var licenseIdentifier = player.Identifiers["license"];
