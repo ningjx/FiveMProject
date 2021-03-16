@@ -3,6 +3,7 @@ using static CitizenFX.Core.Native.API;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Linq;
 
 namespace FirstResourceClient.net
 {
@@ -10,54 +11,68 @@ namespace FirstResourceClient.net
     {
         public Class1()
         {
-            EventHandlers["playerSpawned"] += new Action<dynamic>(OnPlayerSpawned);
-            EventHandlers.Add("sp:clientPlayerSpawned", new Action<dynamic, dynamic, dynamic, dynamic, dynamic, dynamic, dynamic>(PlayerSpawned));
-            Tick += Class1_Tick;
+            EventHandlers["playerSpawned"] += new Action<dynamic>(OnPlayerSpawned);//绑定生成玩家事件
+            EventHandlers["sp:clientPlayerSpawned"] += new Action<dynamic, dynamic, dynamic, dynamic, dynamic, dynamic, dynamic>(PlayerSpawned);//注册一个服务器可以调用的事件
+            Tick += Class1_Tick;//tick上委托一个显示玩家光标的事件
         }
 
-        private List<Blip> Blips = new List<Blip>();
-
+        private Dictionary<int, Blip> Blips = new Dictionary<int, Blip>();
         private Task Class1_Tick()
         {
             return new Task(() =>
             {
-                Blips.ForEach(t => t.Delete());
-                Blips.Clear();
-
                 foreach (var player in Players)
                 {
                     if (Game.Player.Equals(player))
                         continue;
 
-                    var blip = World.CreateBlip(player.Character.Position);
-                    blip.Name = player.Name;
-                    blip.Rotation = (int)player.Character.Heading;
-                    blip.IsFriend = blip.IsFriendly = true;
-
-                    if (player.Character.IsInVehicle())
+                    Blip blip;
+                    if (Blips.TryGetValue(player.Handle, out blip))
                     {
-                        switch (player.Character.CurrentVehicle.ClassType)
-                        {
-                            case VehicleClass.Boats:
-                                blip.Sprite = BlipSprite.Boat;
-                                break;
-                            case VehicleClass.Helicopters:
-                                blip.Sprite = BlipSprite.Helicopter;
-                                break;
-                            case VehicleClass.Planes:
-                                blip.Sprite = BlipSprite.Jet;
-                                break;
-                            default:
-                                blip.Sprite = BlipSprite.RaceCar;
-                                break;
-                        }
+                        blip.Position = player.Character.Position;
+                        blip.Rotation = (int)player.Character.Heading;
+                        SetSprite(player, blip);
+                        Blips[player.Handle] = blip;
                     }
                     else
-                        blip.Sprite = BlipSprite.Player;
-
-                    Blips.Add(blip);
+                    {
+                        blip = World.CreateBlip(player.Character.Position);
+                        blip.Name = player.Name;
+                        blip.IsFriend = blip.IsFriendly = true;
+                        blip.Rotation = (int)player.Character.Heading;
+                        SetSprite(player, blip);
+                        Blips.Add(player.Handle, blip);
+                    }
                 }
+
+                //delete offline players
+                var expireHandles = Blips.Keys.ToList().Except(Players.Select(t => t.Handle)).ToList();
+                expireHandles.ForEach(t => Blips[t].Delete()); ;
             });
+        }
+
+        private void SetSprite(Player player, Blip blip)
+        {
+            if (player.Character.IsInVehicle())
+            {
+                switch (player.Character.CurrentVehicle.ClassType)
+                {
+                    case VehicleClass.Boats:
+                        blip.Sprite = BlipSprite.Boat;
+                        break;
+                    case VehicleClass.Helicopters:
+                        blip.Sprite = BlipSprite.Helicopter;
+                        break;
+                    case VehicleClass.Planes:
+                        blip.Sprite = BlipSprite.Jet;
+                        break;
+                    default:
+                        blip.Sprite = BlipSprite.RaceCar;
+                        break;
+                }
+            }
+            else
+                blip.Sprite = BlipSprite.Player;
         }
 
         private async void PlayerSpawned(dynamic x, dynamic y, dynamic z, dynamic heading, dynamic model, dynamic vehicle, dynamic currentWeapon)
@@ -76,7 +91,8 @@ namespace FirstResourceClient.net
             foreach (WeaponHash weapon in allWeapons)
             {
                 Game.PlayerPed.Weapons.Give(weapon, 1000, false, true);
-                //Game.PlayerPed.Weapons.Select((uint)currentWeapon);
+                if (weapon.GetHashCode() == currentWeapon)
+                    Game.PlayerPed.Weapons.Select(weapon);
             }
             //SetCurrentPedWeapon(Game.Player.Handle, (uint)currentWeapon, true);
         }
