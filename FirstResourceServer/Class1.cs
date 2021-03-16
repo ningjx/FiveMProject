@@ -12,7 +12,7 @@ namespace FirstResourceServer.net
         private const string Path = "PlayerData.json";
         public Class1()
         {
-            EventHandlers.Add("sp:serverPlayerSpawned", new Action<Player, string>(PlayerSpawned));
+            EventHandlers["sp:serverPlayerSpawned"] += new Action<Player, string>(PlayerSpawned);
             EventHandlers["playerDropped"] += new Action<Player, string>(OnPlayerDropped);
         }
 
@@ -46,41 +46,47 @@ namespace FirstResourceServer.net
 
         private async void OnPlayerDropped([FromSource] Player player, string reason)
         {
-            var ped = GetPlayerPed(player.Handle);
-            var playerData = new Dictionary<string, object>
+            try
             {
-                {"X",player.Character.Position.X},
-                {"Y",player.Character.Position.Y},
-                {"Z",player.Character.Position.Z},
-                {"Heading", player.Character.Heading },
-                {"Model",player.Character.Model },
-                {"Vehicle", GetEntityModel(GetVehiclePedIsIn(ped, true))},
-                {"Waepon",GetSelectedPedWeapon(ped)}
-            };
+                var ped = GetPlayerPed(player.Handle);
 
-            Debug.WriteLine(JsonConvert.SerializeObject(player.Identifiers));
-            Debug.WriteLine(JsonConvert.SerializeObject(player.State));
+                var playerData = new Dictionary<string, object>
+                {
+                    {"X",player.Character.Position.X},
+                    {"Y",player.Character.Position.Y},
+                    {"Z",player.Character.Position.Z},
+                    {"Heading", player.Character.Heading },
+                    {"Model",player.Character.Model },
+                    {"Vehicle", GetEntityModel(GetVehiclePedIsIn(ped, false))},
+                    {"Waepon", GetSelectedPedWeapon(ped)}
+                };
 
-            var licenseIdentifier = player.Identifiers["license"];
+                var licenseIdentifier = player.Identifiers["license"];
 
-            await Delay(0);
-            var datas = new Dictionary<string, Dictionary<string, object>>();
-            if (File.Exists(Path))
-            {
-                var text = File.ReadAllText(Path);
-                if (!string.IsNullOrEmpty(text))
-                    datas = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, object>>>(text);
+                await Delay(0);
+                var datas = new Dictionary<string, Dictionary<string, object>>();
+                if (File.Exists(Path))
+                {
+                    var text = File.ReadAllText(Path);
+                    if (!string.IsNullOrEmpty(text))
+                        datas = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, object>>>(text);
 
-                if (datas.ContainsKey(licenseIdentifier))
-                    datas[licenseIdentifier] = playerData;
+                    if (datas.ContainsKey(licenseIdentifier))
+                        datas[licenseIdentifier] = playerData;
+                    else
+                        datas.Add(licenseIdentifier, playerData);
+                }
                 else
+                {
                     datas.Add(licenseIdentifier, playerData);
+                }
+                File.WriteAllText(Path, JsonConvert.SerializeObject(datas));
             }
-            else
+            catch (Exception ex)
             {
-                datas.Add(licenseIdentifier, playerData);
+                Debug.WriteLine(ex.Message);
+                Debug.WriteLine(ex.StackTrace);
             }
-            File.WriteAllText(Path, JsonConvert.SerializeObject(datas));
         }
     }
 }

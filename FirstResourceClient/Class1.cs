@@ -2,6 +2,8 @@
 using static CitizenFX.Core.Native.API;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Linq;
 
 namespace FirstResourceClient.net
 {
@@ -9,38 +11,75 @@ namespace FirstResourceClient.net
     {
         public Class1()
         {
-            EventHandlers["playerSpawned"] += new Action<dynamic>(OnPlayerSpawned);
-            EventHandlers.Add("sp:clientPlayerSpawned", new Action<dynamic, dynamic, dynamic, dynamic, dynamic, dynamic, dynamic>(PlayerSpawned));
+            EventHandlers["playerSpawned"] += new Action<dynamic>(OnPlayerSpawned);//绑定生成玩家事件
+            EventHandlers["sp:clientPlayerSpawned"] += new Action<dynamic, dynamic, dynamic, dynamic, dynamic, dynamic, dynamic>(PlayerSpawned);//注册一个服务器可以调用的事件
+            Tick += Class1_Tick;//tick上委托一个显示玩家光标的事件
         }
 
-        private readonly string[] WeaponNames = { "WEAPON_KNIFE", "WEAPON_NIGHTSTICK", "WEAPON_HAMMER", "WEAPON_BAT",
-       "WEAPON_GOLFCLUB", "WEAPON_CROWBAR", "WEAPON_PISTOL", "WEAPON_COMBATPISTOL",
-       "WEAPON_APPISTOL", "WEAPON_PISTOL50", "WEAPON_MICROSMG", "WEAPON_SMG", "WEAPON_ASSAULTSMG",
-       "WEAPON_ASSAULTRIFLE", "WEAPON_CARBINERIFLE", "WEAPON_ADVANCEDRIFLE", "WEAPON_MG",
-       "WEAPON_COMBATMG", "WEAPON_PUMPSHOTGUN", "WEAPON_SAWNOFFSHOTGUN", "WEAPON_ASSAULTSHOTGUN",
-       "WEAPON_BULLPUPSHOTGUN", "WEAPON_STUNGUN", "WEAPON_SNIPERRIFLE", "WEAPON_HEAVYSNIPER",
-       "WEAPON_GRENADELAUNCHER", "WEAPON_GRENADELAUNCHER_SMOKE", "WEAPON_RPG", "WEAPON_MINIGUN",
-       "WEAPON_GRENADE", "WEAPON_STICKYBOMB", "WEAPON_SMOKEGRENADE", "WEAPON_BZGAS",
-       "WEAPON_MOLOTOV", "WEAPON_FIREEXTINGUISHER", "WEAPON_PETROLCAN", "WEAPON_FLARE",
-       "WEAPON_SNSPISTOL", "WEAPON_SPECIALCARBINE", "WEAPON_HEAVYPISTOL", "WEAPON_BULLPUPRIFLE",
-       "WEAPON_HOMINGLAUNCHER", "WEAPON_PROXMINE", "WEAPON_SNOWBALL", "WEAPON_VINTAGEPISTOL",
-       "WEAPON_DAGGER", "WEAPON_FIREWORK", "WEAPON_MUSKET", "WEAPON_MARKSMANRIFLE",
-       "WEAPON_HEAVYSHOTGUN", "WEAPON_GUSENBERG", "WEAPON_HATCHET", "WEAPON_RAILGUN",
-       "WEAPON_COMBATPDW", "WEAPON_KNUCKLE", "WEAPON_MARKSMANPISTOL", "WEAPON_FLASHLIGHT",
-       "WEAPON_MACHETE", "WEAPON_MACHINEPISTOL", "WEAPON_SWITCHBLADE", "WEAPON_REVOLVER",
-       "WEAPON_COMPACTRIFLE", "WEAPON_DBSHOTGUN", "WEAPON_FLAREGUN", "WEAPON_AUTOSHOTGUN",
-       "WEAPON_BATTLEAXE", "WEAPON_COMPACTLAUNCHER", "WEAPON_MINISMG", "WEAPON_PIPEBOMB",
-       "WEAPON_POOLCUE", "WEAPON_SWEEPER", "WEAPON_WRENCH" };
+        private Dictionary<int, Blip> Blips = new Dictionary<int, Blip>();
+        private Task Class1_Tick()
+        {
+            return new Task(() =>
+            {
+                foreach (var player in Players)
+                {
+                    if (Game.Player.Equals(player))
+                        continue;
+
+                    Blip blip;
+                    if (Blips.TryGetValue(player.Handle, out blip))
+                    {
+                        blip.Position = player.Character.Position;
+                        blip.Rotation = (int)player.Character.Heading;
+                        SetSprite(player, blip);
+                        Blips[player.Handle] = blip;
+                    }
+                    else
+                    {
+                        blip = World.CreateBlip(player.Character.Position);
+                        blip.Name = player.Name;
+                        blip.IsFriend = blip.IsFriendly = true;
+                        blip.Rotation = (int)player.Character.Heading;
+                        SetSprite(player, blip);
+                        Blips.Add(player.Handle, blip);
+                    }
+                }
+
+                //delete offline players
+                var expireHandles = Blips.Keys.ToList().Except(Players.Select(t => t.Handle)).ToList();
+                expireHandles.ForEach(t => Blips[t].Delete()); ;
+            });
+        }
+
+        private void SetSprite(Player player, Blip blip)
+        {
+            if (player.Character.IsInVehicle())
+            {
+                switch (player.Character.CurrentVehicle.ClassType)
+                {
+                    case VehicleClass.Boats:
+                        blip.Sprite = BlipSprite.Boat;
+                        break;
+                    case VehicleClass.Helicopters:
+                        blip.Sprite = BlipSprite.Helicopter;
+                        break;
+                    case VehicleClass.Planes:
+                        blip.Sprite = BlipSprite.Jet;
+                        break;
+                    default:
+                        blip.Sprite = BlipSprite.RaceCar;
+                        break;
+                }
+            }
+            else
+                blip.Sprite = BlipSprite.Player;
+        }
 
         private async void PlayerSpawned(dynamic x, dynamic y, dynamic z, dynamic heading, dynamic model, dynamic vehicle, dynamic currentWeapon)
         {
-            //var ped = GetPlayerPed(-1);
-            await Game.Player.ChangeModel(new Model(model));
-            Game.Player.Money = 99999999;
+            Game.Player.ChangeModel(new Model(model));
             Game.PlayerPed.Position = new Vector3((float)x, (float)y, (float)z);
-            if (heading != 0)
-                Game.PlayerPed.Heading = (float)heading;
-
+            Game.PlayerPed.Heading = (float)heading;
             await Delay(0);
             if (vehicle != 0)
             {
@@ -48,16 +87,14 @@ namespace FirstResourceClient.net
                 Game.PlayerPed.SetIntoVehicle(ve, VehicleSeat.Driver);
             }
 
-            //foreach (var weapon in WeaponNames)
-            //{
-            //    try
-            //    {
-            //        GiveWeaponToPed(ped, Convert.ToUInt32(GetHashKey(weapon)), 99999, false, false);
-            //    }
-            //    catch { }
-            //}
-
-            //SetCurrentPedWeapon(ped, (uint)currentWeapon, true);
+            var allWeapons = Enum.GetValues(typeof(WeaponHash));
+            foreach (WeaponHash weapon in allWeapons)
+            {
+                Game.PlayerPed.Weapons.Give(weapon, 1000, false, true);
+                if (weapon.GetHashCode() == currentWeapon)
+                    Game.PlayerPed.Weapons.Select(weapon);
+            }
+            //SetCurrentPedWeapon(Game.Player.Handle, (uint)currentWeapon, true);
         }
 
         private bool IsFirstSpawn = true;
