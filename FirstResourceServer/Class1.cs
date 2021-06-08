@@ -49,7 +49,7 @@ namespace FirstResourceServer.net
             try
             {
                 var ped = GetPlayerPed(player.Handle);
-
+                
                 var playerData = new Dictionary<string, object>
                 {
                     {"X",player.Character.Position.X},
