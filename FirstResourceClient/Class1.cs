@@ -1,9 +1,5 @@
 ﻿using CitizenFX.Core;
-using static CitizenFX.Core.Native.API;
 using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Linq;
 
 namespace FirstResourceClient.net
 {
@@ -17,7 +13,7 @@ namespace FirstResourceClient.net
         }
 
         //private Dictionary<int, Blip> Blips = new Dictionary<int, Blip>();
-        
+
         //private Task Class1_Tick()
         //{
         //    return new Task(() =>
